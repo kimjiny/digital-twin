@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Isaac Lab / training artifacts
+logs/
+outputs/
+*.pt
+*.pth
+*.usd
+*.usdc
+*.usda
+*.usdz
+*.tar.gz
+*.zip
+
+# Logs / temp
+*.log
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
