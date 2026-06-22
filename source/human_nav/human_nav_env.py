@@ -90,6 +90,12 @@ class HumanNavEnvCfg(DirectRLEnvCfg):
     rew_collision = -25.0
     rew_robot_collision = -30.0
     rew_step = -0.01
+    # dense proximity shaping: graded penalty inside a caution band around
+    # obstacles / robot (encourages keeping a margin -> fewer collisions)
+    caution_dist = 1.2          # m  static-obstacle caution band start
+    robot_caution_dist = 1.5    # m  robot caution band start
+    rew_obs_proximity = -0.4    # per-step penalty at the collision edge
+    rew_robot_proximity = -0.5
 
 
 @configclass
@@ -123,6 +129,10 @@ class HumanNavEnv(DirectRLEnv):
         self._cur_dist = torch.zeros(self.num_envs, device=self.device)
         self._reached = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         self._collided = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._hit_obs = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._hit_robot = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._min_obs = torch.full((self.num_envs,), 10.0, device=self.device)
+        self._min_robot = torch.full((self.num_envs,), 10.0, device=self.device)
 
         # moving robot state
         self.robot_phase = torch.zeros(self.num_envs, device=self.device)
@@ -203,6 +213,8 @@ class HumanNavEnv(DirectRLEnv):
         self._hit_obs = min_obs < self.cfg.collision_radius
         self._hit_robot = d_robot < self.cfg.robot_collision_radius
         self._collided = self._hit_obs | self._hit_robot
+        self._min_obs = min_obs
+        self._min_robot = d_robot
 
         terminated = self._reached | self._collided
         time_out = self.episode_length_buf >= self.max_episode_length - 1
@@ -211,11 +223,20 @@ class HumanNavEnv(DirectRLEnv):
     def _get_rewards(self) -> torch.Tensor:
         progress = self.prev_dist - self._cur_dist
         self.prev_dist = self._cur_dist.clone()
+
+        # dense proximity penalties (graded 0 at caution band -> 1 at collision edge)
+        denom_o = max(self.cfg.caution_dist - self.cfg.collision_radius, 1e-3)
+        obs_close = ((self.cfg.caution_dist - self._min_obs) / denom_o).clamp(0.0, 1.0)
+        denom_r = max(self.cfg.robot_caution_dist - self.cfg.robot_collision_radius, 1e-3)
+        robot_close = ((self.cfg.robot_caution_dist - self._min_robot) / denom_r).clamp(0.0, 1.0)
+
         reward = (
             self.cfg.rew_progress * progress
             + self.cfg.rew_goal * self._reached.float()
             + self.cfg.rew_collision * self._hit_obs.float()
             + self.cfg.rew_robot_collision * self._hit_robot.float()
+            + self.cfg.rew_obs_proximity * obs_close
+            + self.cfg.rew_robot_proximity * robot_close
             + self.cfg.rew_step
         )
         return reward

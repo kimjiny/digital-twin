@@ -13,19 +13,24 @@ humanoid robot (G1 + GR00T).
 
 | Task | Setup | Total reward (mean) |
 |---|---|---|
-| Static-obstacle avoidance (v1) | empty scene, 4.8k steps | −8.8 → **+51** |
-| + Moving robot (v2) | empty scene, 4.8k steps | −14.6 → **+39** |
-| In room (`simple_room.usd`) | 256 envs, 4.8k steps | −18.7 → **+20** |
-| In room, longer training | 256 envs, 24k steps | −7.8 → **+53** |
+| Static-obstacle avoidance (v1) | empty scene, 4.8k steps | −8.8 → +51 |
+| + Moving robot (v2) | empty scene, 4.8k steps | −14.6 → +39 |
+| In room (`simple_room.usd`) | 256 envs, 4.8k steps | −18.7 → +20 |
+| In room, longer | 256 envs, 24k steps | −7.8 → +53 |
+| **In room, + proximity shaping** | **256 envs, 48k steps** | **+14.7 → +50** |
 
-**Evaluation rollout** (trained room policy, 49 episodes):
+**Evaluation rollout** (room policy, deterministic):
 
-| outcome | rate |
-|---|---|
-| reached goal (success) | **69.4%** |
-| hit static obstacle | 26.5% |
-| hit moving robot | 4.1% |
-| timeout | 0% |
+| outcome | baseline (24k) | **+ proximity shaping (48k)** |
+|---|---|---|
+| reached goal (success) | 69.4% | **98.2%** |
+| hit static obstacle | 26.5% | **1.1%** |
+| hit moving robot | 4.1% | **0.7%** |
+| timeout | 0% | 0% |
+
+The dense proximity penalty (graded cost inside a caution band around obstacles
+and the robot) plus longer training cut collisions drastically — the agent
+learns to keep a safety margin while still reaching the goal.
 
 ## Environment
 
@@ -34,7 +39,8 @@ humanoid robot (G1 + GR00T).
   positions of 3 static obstacles (6), relative position of moving robot (2),
   robot velocity (2).
 - **Reward**: progress to goal, +50 goal bonus, −25 obstacle collision,
-  −30 robot collision, small step penalty.
+  −30 robot collision, **dense proximity penalty** inside a caution band around
+  obstacles/robot, small step penalty.
 - **Termination**: goal reached / collision / timeout.
 - **Moving robot**: a kinematic cylinder patrolling along the y-axis that the
   agent must avoid.
